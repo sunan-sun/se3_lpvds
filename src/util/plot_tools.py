@@ -7,7 +7,6 @@ from matplotlib.ticker import FormatStrFormatter
 from scipy.spatial.transform import Rotation as R
 from .quat_tools import *
 import random
-from dtw import dtw
 
 
 font = {'family' : 'Times New Roman',
@@ -21,6 +20,12 @@ mpl.rc('font', **font)
 
 
 def plot_vel(v_test, w_test):
+    """Plots the linear and angular velocities over time.
+
+    Args:
+        v_test: List or array of linear velocities (M x 3).
+        w_test: List or array of angular velocities (M x 3).
+    """
     v_test = np.vstack(v_test)
     M, N = v_test.shape
 
@@ -32,7 +37,8 @@ def plot_vel(v_test, w_test):
     for k in range(3):
         axs[k].scatter(np.arange(M), v_test[:, k], s=5, color=colors[k])
         # axs[k].set_ylim([0, 1])
-
+    
+    axs[0].set_title("Linear Velocity")
 
     w_test = np.vstack(w_test)
     M, N = w_test.shape
@@ -44,10 +50,18 @@ def plot_vel(v_test, w_test):
     for k in range(3):
         axs[k].scatter(np.arange(M), w_test[:, k], s=5, color=colors[k])
         # axs[k].set_ylim([0, 1])
+    axs[0].set_title("Angular Velocity")
 
 
 
 def plot_gamma(gamma_arr, **argv):
+    """Plots the gamma values (activation weights) over time for each component.
+
+    Args:
+        gamma_arr: Array of gamma values (M x K), where M is the number of time steps
+                   and K is the number of components.
+        **argv: Additional keyword arguments. Can include "title" for the plot title.
+    """
 
     M, K = gamma_arr.shape
 
@@ -69,6 +83,16 @@ def plot_gamma(gamma_arr, **argv):
 
 
 def plot_result(p_train, p_test, q_test):
+    """Plots the 3D trajectory reproduction results.
+
+    Displays the demonstrated trajectory, the reproduced trajectory,
+    initial/target points, and orientation frames along the reproduced path.
+
+    Args:
+        p_train: Demonstrated trajectory positions (N x 3).
+        p_test: Reproduced trajectory positions (M x 3).
+        q_test: Reproduced trajectory orientations as SciPy Rotation objects (list or array of length M).
+    """
 
     fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(projection='3d')
@@ -116,7 +140,18 @@ def plot_result(p_train, p_test, q_test):
 
 
 
-def plot_gmm_ori(p_in, gmm):
+def plot_gmm(p_in, gmm):
+    """Plots the GMM clustering results in 3D.
+
+    Displays the input data points colored by their assigned cluster,
+    and shows the mean orientation of each Gaussian component.
+
+    Args:
+        p_in: Input position data (N x 3).
+        gmm: Fitted GMM object, expected to have attributes 'assignment_arr' (N,),
+             'K' (number of components), and 'gaussian_list' (list of dicts,
+             where each dict contains ["mu"][1] as the mean orientation).
+    """
 
     label = gmm.assignment_arr
     K     = gmm.K

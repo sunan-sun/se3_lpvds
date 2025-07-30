@@ -42,7 +42,9 @@ def _process_bag(path):
         q_raw.append([R.from_quat(quat_traj[:, i]) for i in range(quat_traj.shape[1]) ])
         t_raw.append(time_traj.reshape(time_traj.shape[1]))
 
-    return p_raw, q_raw, t_raw
+    dt = np.average([t_raw[0][i+1] - t_raw[0][i] for i in range(len(t_raw[0])-1)])
+
+    return p_raw, q_raw, t_raw, dt
 
 
 
@@ -117,8 +119,9 @@ def load_clfd_dataset(task_id=1, num_traj=1, sub_sample=3):
         q_raw.append([R.from_quat(q) for q in data_ori.tolist()])
         t_raw.append(np.linspace(0, T, M, endpoint=False))   # hand engineer an equal-length time stamp
 
+    dt = np.average([t_raw[0][i+1] - t_raw[0][i] for i in range(len(t_raw[0])-1)])
 
-    return p_raw, q_raw, t_raw
+    return p_raw, q_raw, t_raw, dt
 
 
 

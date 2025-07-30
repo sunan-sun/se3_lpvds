@@ -34,17 +34,38 @@ class se3_class:
 
             N:                      Observation dimenstion (assuming 3D)
         """
+        # Standardize quaternion signs (ensure scalar part w is negative)
+        standardized_q_in = []
+        for q in q_in:
+            quat = q.as_quat()
+            if quat[3] > 0:
+                standardized_q_in.append(R.from_quat(-quat))
+            else:
+                standardized_q_in.append(q)
+
+        standardized_q_out = []
+        for q in q_out:
+            quat = q.as_quat()
+            if quat[3] > 0:
+                standardized_q_out.append(R.from_quat(-quat))
+            else:
+                standardized_q_out.append(q)
+
+        q_att_quat = q_att.as_quat()
+        if q_att_quat[3] > 0:
+            q_att = R.from_quat(-q_att_quat)
 
         # store parameters
         self.p_in  = p_in
-        self.q_in  = q_in
+        self.q_in  = standardized_q_in
 
         self.p_out = p_out
-        self.q_out = q_out
+        self.q_out = standardized_q_out
 
         self.p_att = p_att
         self.q_att = q_att
 
+        self.dt = dt
         self.K_init = K_init
         self.M = len(q_in)
 
@@ -124,13 +145,24 @@ class se3_class:
         
 
 
-    def _step(self, p_in, q_in, step_size):
+    def step(self, p_in, q_in, step_size):
         """ Integrate forward by one time step """
-
+        p_in = p_in.reshape(1, -1)
+        
         p_next, gamma_pos, v = self.pos_ds._step(p_in, step_size)
         q_next, gamma_ori, w = self.ori_ds._step(q_in, step_size)
 
         return p_next, q_next, gamma_pos, gamma_ori, v, w
 
-    
+    def compute_reconstruction_error(self):
+        error = 0
+        total_pts = self.p_in.shape[0]
+        for i in range(total_pts):
+            p_in = self.p_in[i]
+            q_in = self.q_in[i]
+            p_out = self.p_out[i]
+            q_out = self.q_out[i]
+            p_next, q_next, gamma_pos, gamma_ori, v, w = self.step(p_in, q_in, 1)
+            error += np.linalg.norm(p_out - p_next) + np.rad2deg(np.linalg.norm(quat_tools.riem_log(q_out, q_next)))
+        return error / total_pts
 
