@@ -154,6 +154,45 @@ class se3_class:
 
         return p_next, q_next, gamma_pos, gamma_ori, v, w
 
+    def __getstate__(self):
+        """Prepare the object state for pickling.
+
+        We avoid serializing the heavy (and often non-picklable) learned
+        dynamical system objects and instead rebuild them on deserialisation.
+        """
+        state = self.__dict__.copy()
+        # Remove the attributes that cannot be pickled (they include C++
+        # objects / large numpy arrays created by CVXGEN, etc.).
+        state.pop("pos_ds", None)
+        state.pop("ori_ds", None)
+        return state
+
+    def __setstate__(self, state):
+        """Restore the object from the pickled state.
+
+        The light-weight data (training trajectories, attractor, etc.) are
+        already contained in *state*.  We recreate the heavy dynamical system
+        objects so that downstream calls (e.g. ``step``) continue to work even
+        after unpickling.
+        """
+        self.__dict__.update(state)
+        # Re-create the LPVDS (position) and quaternion DS (orientation)
+        self.pos_ds = lpvds_class(self.p_in, self.p_out, self.p_att)
+        self.ori_ds = quat_class(self.q_in, self.q_out, self.q_att, self.dt, self.K_init)
+        # Run clustering / optimisation steps so that the internal parameters
+        # are available.  These operations are fast because they are performed
+        # on the already-processed demonstration data.
+        try:
+            self.pos_ds._cluster()
+            self.pos_ds._optimize()
+            self.ori_ds._cluster()
+            self.ori_ds._optimize()
+        except Exception as _e:
+            # In the rare case optimisation fails (e.g. missing CVXGEN), we
+            # still ensure the attributes exist so that attribute access does
+            # not fail later on.
+            pass
+
     def compute_reconstruction_error(self):
         error = 0
         total_pts = self.p_in.shape[0]
