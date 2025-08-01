@@ -1,6 +1,8 @@
 [submodule "src/lpvds"]
 	path = src/lpvds
-	url = git@github.com:felixzheng02/lpvds.git
+	url = https://github.com/felixzheng02/lpvds.git
+    branch = ds_policy
 [submodule "src/quaternion_ds"]
 	path = src/quaternion_ds
 	url = https://github.com/felixzheng02/quaternion_ds.git
+    branch = ds_policy
