@@ -3,4 +3,4 @@
 	url = git@github.com:felixzheng02/lpvds.git
 [submodule "src/quaternion_ds"]
 	path = src/quaternion_ds
-	url = https://github.com/SunannnSun/quaternion_ds.git
+	url = https://github.com/felixzheng02/quaternion_ds.git
