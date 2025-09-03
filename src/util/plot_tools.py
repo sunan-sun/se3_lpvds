@@ -5,9 +5,8 @@ import matplotlib.animation as animation
 from matplotlib.ticker import MaxNLocator
 from matplotlib.ticker import FormatStrFormatter
 from scipy.spatial.transform import Rotation as R
-from .quat_tools import *
+# from .quat_tools import *
 import random
-from dtw import dtw
 
 
 font = {'family' : 'Times New Roman',
@@ -21,6 +20,12 @@ mpl.rc('font', **font)
 
 
 def plot_vel(v_test, w_test):
+    """Plots the linear and angular velocities over time.
+
+    Args:
+        v_test: List or array of linear velocities (M x 3).
+        w_test: List or array of angular velocities (M x 3).
+    """
     v_test = np.vstack(v_test)
     M, N = v_test.shape
 
@@ -32,7 +37,8 @@ def plot_vel(v_test, w_test):
     for k in range(3):
         axs[k].scatter(np.arange(M), v_test[:, k], s=5, color=colors[k])
         # axs[k].set_ylim([0, 1])
-
+    
+    axs[0].set_title("Linear Velocity")
 
     w_test = np.vstack(w_test)
     M, N = w_test.shape
@@ -44,10 +50,18 @@ def plot_vel(v_test, w_test):
     for k in range(3):
         axs[k].scatter(np.arange(M), w_test[:, k], s=5, color=colors[k])
         # axs[k].set_ylim([0, 1])
+    axs[0].set_title("Angular Velocity")
 
 
 
 def plot_gamma(gamma_arr, **argv):
+    """Plots the gamma values (activation weights) over time for each component.
+
+    Args:
+        gamma_arr: Array of gamma values (M x K), where M is the number of time steps
+                   and K is the number of components.
+        **argv: Additional keyword arguments. Can include "title" for the plot title.
+    """
 
     K, M = gamma_arr.shape
     colors = ["r", "g", "b", "k", 'c', 'm', 'y', 'crimson', 'lime'] + [
@@ -77,6 +91,16 @@ def plot_gamma(gamma_arr, **argv):
 
 
 def plot_result(p_train, p_test, q_test):
+    """Plots the 3D trajectory reproduction results.
+
+    Displays the demonstrated trajectory, the reproduced trajectory,
+    initial/target points, and orientation frames along the reproduced path.
+
+    Args:
+        p_train: Demonstrated trajectory positions (N x 3).
+        p_test: Reproduced trajectory positions (M x 3).
+        q_test: Reproduced trajectory orientations as SciPy Rotation objects (list or array of length M).
+    """
 
     fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(projection='3d')
@@ -124,7 +148,18 @@ def plot_result(p_train, p_test, q_test):
 
 
 
-def plot_gmm_ori(p_in, gmm):
+def plot_gmm(p_in, gmm):
+    """Plots the GMM clustering results in 3D.
+
+    Displays the input data points colored by their assigned cluster,
+    and shows the mean orientation of each Gaussian component.
+
+    Args:
+        p_in: Input position data (N x 3).
+        gmm: Fitted GMM object, expected to have attributes 'assignment_arr' (N,),
+             'K' (number of components), and 'gaussian_list' (list of dicts,
+             where each dict contains ["mu"][1] as the mean orientation).
+    """
 
     label = gmm.assignment_arr
     K     = gmm.K
@@ -178,26 +213,151 @@ def plot_gmm_ori(p_in, gmm):
 
 
 
-def plot_gmm_pos(p_in, gmm):
+def _plot_ellipsoid(ax, mean, cov, color, alpha=0.3, confidence=2.0):
+    """Plot a 3D ellipsoid representing a Gaussian component.
+    
+    Args:
+        ax: 3D matplotlib axis
+        mean: Mean vector (3,)
+        cov: Covariance matrix (3x3)
+        color: Color for the ellipsoid
+        alpha: Transparency
+        confidence: Confidence level (standard deviations)
+    """
+    # Eigenvalue decomposition
+    eigenvals, eigenvecs = np.linalg.eigh(cov)
+    
+    # Sort by eigenvalue
+    order = eigenvals.argsort()[::-1]
+    eigenvals = eigenvals[order]
+    eigenvecs = eigenvecs[:, order]
+    
+    # Radii of the ellipsoid (scale by confidence level)
+    radii = confidence * np.sqrt(eigenvals)
+    
+    # Generate a unit sphere
+    u = np.linspace(0, 2 * np.pi, 20)
+    v = np.linspace(0, np.pi, 20)
+    x_sphere = np.outer(np.cos(u), np.sin(v))
+    y_sphere = np.outer(np.sin(u), np.sin(v))
+    z_sphere = np.outer(np.ones(np.size(u)), np.cos(v))
+    
+    # Scale by radii
+    ellipsoid = np.stack([x_sphere * radii[0], 
+                         y_sphere * radii[1], 
+                         z_sphere * radii[2]], axis=-1)
+    
+    # Rotate by eigenvectors and translate by mean
+    ellipsoid_rotated = np.dot(ellipsoid, eigenvecs.T) + mean
+    
+    # Plot the ellipsoid surface
+    ax.plot_surface(ellipsoid_rotated[:, :, 0], 
+                   ellipsoid_rotated[:, :, 1], 
+                   ellipsoid_rotated[:, :, 2], 
+                   color=color, alpha=alpha, linewidth=0.1)
+
+
+def plot_gmm_pos(x, gmm, ax=None):
+    """Plot clustered position data with Gaussian ellipsoids.
+
+    Args:
+        x (list[list[list|np.ndarray]]): Nested list where x[i][j] is a 3-D point.
+        gmm: Object with attributes assignment_arr, K, gaussian_list.
+    """
+
+    # Flatten trajectories into a single point array and compute per-point alpha
+    pts = []
+    alphas = []
+    for traj in x:
+        n = len(traj)
+        for idx, p in enumerate(traj):
+            pts.append(p)
+            alphas.append(0.2 + 0.8 * (idx / max(n - 1, 1)))
+    p_in = np.asarray(pts)
 
     label = gmm.assignment_arr
     K     = gmm.K
 
     colors = ["r", "g", "b", "k", 'c', 'm', 'y', 'crimson', 'lime'] + [
-    "#" + ''.join([random.choice('0123456789ABCDEF') for j in range(6)]) for i in range(200)]
+        "#" + ''.join([random.choice('0123456789ABCDEF') for j in range(6)]) for i in range(200)]
 
-    color_mapping = np.take(colors, label)
+    # Map each point's label to a base color then add alpha
+    import matplotlib.colors as mcolors
+    rgba_colors = [mcolors.to_rgba(colors[lbl], alpha=alphas[i]) for i, lbl in enumerate(label)]
 
-    fig = plt.figure(figsize=(12, 10))
-    ax = fig.add_subplot(projection='3d')
+    # Create axis if not provided
+    if ax is None:
+        fig = plt.figure(figsize=(12, 10))
+        ax = fig.add_subplot(projection='3d')
 
-    ax.scatter(p_in[:, 0], p_in[:, 1], p_in[:, 2], 'o', color=color_mapping[:], s=1, alpha=0.4, label="Demonstration")
+    ax.scatter(
+        p_in[:, 0], p_in[:, 1], p_in[:, 2], 'o',
+        color=rgba_colors, s=5, label="Demonstration", depthshade=False
+    )
 
-    colors = ("#FF6666", "#005533", "#1199EE")  # Colorblind-safe RGB
+    # Draw a polyline for each trajectory to connect its points with increasing thickness
+    from mpl_toolkits.mplot3d.art3d import Line3DCollection
+    for traj in x:
+        traj_np = np.asarray(traj)
+        if traj_np.ndim == 2 and traj_np.shape[1] == 3 and traj_np.shape[0] > 1:
+            # Build line segments between consecutive points
+            segments = np.stack([traj_np[:-1], traj_np[1:]], axis=1)  # (n-1, 2, 3)
+            num_segs = segments.shape[0]
+            if num_segs <= 0:
+                continue
+            # Line width ramps from thin to thick along the trajectory
+            min_w, max_w = 0.6, 2.5
+            widths = np.linspace(min_w, max_w, num_segs)
+            # Alpha ramps from 0.2 (start) to 1.0 (end) along the trajectory
+            import matplotlib.colors as mcolors
+            base_color = "#444444"
+            seg_alphas = np.linspace(0.2, 1.0, num_segs)
+            seg_colors = [mcolors.to_rgba(base_color, a) for a in seg_alphas]
+            lc = Line3DCollection(segments, colors=seg_colors, linewidths=widths)
+            ax.add_collection3d(lc)
 
+    # Plot Gaussian ellipsoids
+    for k in range(K):
+        mean = gmm.gaussian_list[k]["mu"]
+        cov = gmm.gaussian_list[k]["sigma"]
+        
+        # Plot ellipsoid for this Gaussian component
+        _plot_ellipsoid(ax, mean, cov, colors[k], alpha=0.1)
 
-    ax.axis('equal')
+    # --------------------------------------------------
+    # Automatically determine axis limits to encompass
+    # both data points and ellipsoids
+    # --------------------------------------------------
+    xyz_min = p_in.min(axis=0).copy()
+    xyz_max = p_in.max(axis=0).copy()
 
+    # Include ellipsoid extents
+    for k in range(K):
+        cov = gmm.gaussian_list[k]["sigma"]
+        mean = gmm.gaussian_list[k]["mu"]
+        eigenvals, _ = np.linalg.eigh(cov)
+        radii = 2.0 * np.sqrt(eigenvals)  # confidence=2.0 as in _plot_ellipsoid
+        xyz_min = np.minimum(xyz_min, mean - radii)
+        xyz_max = np.maximum(xyz_max, mean + radii)
+
+    padding = 0.05 * (xyz_max - xyz_min)
+    ax.set_xlim(xyz_min[0] - padding[0], xyz_max[0] + padding[0])
+    ax.set_ylim(xyz_min[1] - padding[1], xyz_max[1] + padding[1])
+    ax.set_zlim(xyz_min[2] - padding[2], xyz_max[2] + padding[2])
+
+    def _set_axes_equal(ax):
+        """Set 3D plot axes to equal scale."""
+        x_limits = ax.get_xlim3d()
+        y_limits = ax.get_ylim3d()
+        z_limits = ax.get_zlim3d()
+        span = max(x_limits[1]-x_limits[0], y_limits[1]-y_limits[0], z_limits[1]-z_limits[0])
+        x_center = np.mean(x_limits)
+        y_center = np.mean(y_limits)
+        z_center = np.mean(z_limits)
+        ax.set_xlim3d(x_center - span/2, x_center + span/2)
+        ax.set_ylim3d(y_center - span/2, y_center + span/2)
+        ax.set_zlim3d(z_center - span/2, z_center + span/2)
+    _set_axes_equal(ax)
 
     ax.set_xlabel(r'$\xi_1$', labelpad=20)
     ax.set_ylabel(r'$\xi_2$', labelpad=20)
@@ -209,8 +369,6 @@ def plot_gmm_pos(p_in, gmm):
     ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
     ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
     ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
-
-
 
 
 def plot_p_out(p_in, p_out, pos_obj):

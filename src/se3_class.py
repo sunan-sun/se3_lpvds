@@ -34,17 +34,38 @@ class se3_class:
 
             N:                      Observation dimenstion (assuming 3D)
         """
+        # Standardize quaternion signs (ensure scalar part w is negative)
+        standardized_q_in = []
+        for q in q_in:
+            quat = q.as_quat()
+            if quat[3] > 0:
+                standardized_q_in.append(R.from_quat(-quat))
+            else:
+                standardized_q_in.append(q)
+
+        standardized_q_out = []
+        for q in q_out:
+            quat = q.as_quat()
+            if quat[3] > 0:
+                standardized_q_out.append(R.from_quat(-quat))
+            else:
+                standardized_q_out.append(q)
+
+        q_att_quat = q_att.as_quat()
+        if q_att_quat[3] > 0:
+            q_att = R.from_quat(-q_att_quat)
 
         # store parameters
         self.p_in  = p_in
-        self.q_in  = q_in
+        self.q_in  = standardized_q_in
 
         self.p_out = p_out
-        self.q_out = q_out
+        self.q_out = standardized_q_out
 
         self.p_att = p_att
         self.q_att = q_att
 
+        self.dt = dt
         self.K_init = K_init
         self.M = len(q_in)
 
@@ -124,13 +145,63 @@ class se3_class:
         
 
 
-    def _step(self, p_in, q_in, step_size):
+    def step(self, p_in, q_in, step_size):
         """ Integrate forward by one time step """
-
+        p_in = p_in.reshape(1, -1)
+        
         p_next, gamma_pos, v = self.pos_ds._step(p_in, step_size)
         q_next, gamma_ori, w = self.ori_ds._step(q_in, step_size)
 
         return p_next, q_next, gamma_pos, gamma_ori, v, w
 
-    
+    def __getstate__(self):
+        """Prepare the object state for pickling.
+
+        We avoid serializing the heavy (and often non-picklable) learned
+        dynamical system objects and instead rebuild them on deserialisation.
+        """
+        state = self.__dict__.copy()
+        # Remove the attributes that cannot be pickled (they include C++
+        # objects / large numpy arrays created by CVXGEN, etc.).
+        state.pop("pos_ds", None)
+        state.pop("ori_ds", None)
+        return state
+
+    def __setstate__(self, state):
+        """Restore the object from the pickled state.
+
+        The light-weight data (training trajectories, attractor, etc.) are
+        already contained in *state*.  We recreate the heavy dynamical system
+        objects so that downstream calls (e.g. ``step``) continue to work even
+        after unpickling.
+        """
+        self.__dict__.update(state)
+        # Re-create the LPVDS (position) and quaternion DS (orientation)
+        self.pos_ds = lpvds_class(self.p_in, self.p_out, self.p_att)
+        self.ori_ds = quat_class(self.q_in, self.q_out, self.q_att, self.dt, self.K_init)
+        # Run clustering / optimisation steps so that the internal parameters
+        # are available.  These operations are fast because they are performed
+        # on the already-processed demonstration data.
+        try:
+            self.pos_ds._cluster()
+            self.pos_ds._optimize()
+            self.ori_ds._cluster()
+            self.ori_ds._optimize()
+        except Exception as _e:
+            # In the rare case optimisation fails (e.g. missing CVXGEN), we
+            # still ensure the attributes exist so that attribute access does
+            # not fail later on.
+            pass
+
+    def compute_reconstruction_error(self):
+        error = 0
+        total_pts = self.p_in.shape[0]
+        for i in range(total_pts):
+            p_in = self.p_in[i]
+            q_in = self.q_in[i]
+            p_out = self.p_out[i]
+            q_out = self.q_out[i]
+            p_next, q_next, gamma_pos, gamma_ori, v, w = self.step(p_in, q_in, 1)
+            error += np.linalg.norm(p_out - p_next) + np.rad2deg(np.linalg.norm(quat_tools.riem_log(q_out, q_next)))
+        return error / total_pts
 

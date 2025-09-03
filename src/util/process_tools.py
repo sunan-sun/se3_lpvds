@@ -1,3 +1,12 @@
+"""
+Utility functions for processing and manipulating trajectories in SE(3) space.
+This module provides tools for:
+- Shifting, smoothing, and filtering position and orientation trajectories
+- Computing velocities from trajectory data
+- Managing quaternions for orientation representation
+- Preprocessing trajectory data for dynamical systems learning
+"""
+
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,10 +21,20 @@ from .quat_tools import *
 
 
 def _compute_ang_vel(q_i, q_ip1, dt=0.01):
-    """  Compute angular velocity """
+    """  
+    Compute angular velocity between two consecutive orientations
+    
+    Args:
+        q_i: Current quaternion (as scipy Rotation)
+        q_ip1: Next quaternion
+        dt: Time step between the orientations
+        
+    Returns:
+        w: Angular velocity vector
+    """
 
-    dq = q_i.inv() * q_ip1    # from q_i to q_ip1 in body frame
-    # dq = q_kp1 * q_k.inv()    # from q_i to q_ip1 in fixed frame
+    # dq = q_i.inv() * q_ip1    # from q_i to q_ip1 in body frame
+    dq = q_ip1 * q_i.inv()    # from q_i to q_ip1 in fixed frame
 
     dq = dq.as_rotvec() 
     w  = dq / dt
@@ -26,6 +45,16 @@ def _compute_ang_vel(q_i, q_ip1, dt=0.01):
 
 
 def _shift_pos(p_list):
+    """
+    Shift position trajectories so they end at the same point
+    
+    Args:
+        p_list: List of position trajectories
+        
+    Returns:
+        p_shifted: List of shifted position trajectories
+        p_att_mean: Mean attractor position (final position)
+    """
 
     L = len(p_list)
 
@@ -38,13 +67,20 @@ def _shift_pos(p_list):
 
         p_shifted.append(p_diff.reshape(1, -1) + p_list[l])
 
-    return p_shifted, p_att_mean
-
-
+    return p_shifted, p_att_mean, p_att_list
 
 
 def _shift_ori(q_list):
     """
+    Shift orientation trajectories so they end at the same orientation
+    
+    Args:
+        q_list: List of orientation trajectories (quaternions)
+        
+    Returns:
+        q_shifted: List of shifted orientation trajectories
+        q_att_mean: Mean attractor orientation (final orientation)
+    
     Note:
     ---- 
         Scipy methods, e.g. "R.mean()", "R.inv()" and "R.__mul__()" will OFTEN flip the SIGNS of the computed quaternion
@@ -64,16 +100,23 @@ def _shift_ori(q_list):
 
         q_shifted.append([q_diff * q for q in q_list[l]])
 
-    return q_shifted, q_shifted[-1][-1]
-
-
+    return q_shifted, q_shifted[-1][-1], q_att_list
 
 
 def _smooth_pos(p_in:list, k=80):
-    """ k is window length """
+    """ 
+    Smooth position trajectories using Savitzky-Golay filter
+    
+    Args:
+        p_in: List of position trajectories
+        k: Window length for filter
+        
+    Returns:
+        p_smooth: List of smoothed position trajectories
+    """
     p_smooth = []
     for l in range(len(p_in)):
-            p_smooth.append(savgol_filter(p_in[l], window_length=k, polyorder=2, axis=0, mode="nearest"))
+        p_smooth.append(savgol_filter(p_in[l], window_length=k, polyorder=2, axis=0, mode="nearest"))
     
     return p_smooth
 
@@ -84,6 +127,14 @@ def _smooth_pos(p_in:list, k=80):
 def _smooth_ori(q_list, q_att, opt):
     """
     Smoothen the orientation trajectory using Savgol filter or SLERP interpolation
+    
+    Args:
+        q_list: List of orientation trajectories
+        q_att: Attractor orientation
+        opt: Smoothing method ("savgol" or "slerp")
+        
+    Returns:
+        q_smooth: List of smoothed orientation trajectories
 
     Note:
     ----
@@ -131,10 +182,23 @@ def _smooth_ori(q_list, q_att, opt):
 
 
 def _filter(p_list, q_list, t_list):
-    """   Extract a smooth velocity profile (non-zero except near the attractor)  """
+    """   
+    Extract a smooth velocity profile by filtering orientation trajectories
+    Only keeps points with sufficient angular velocity until near the attractor
+    
+    Args:
+        p_list: List of position trajectories
+        q_list: List of orientation trajectories
+        t_list: List of time stamps
+        
+    Returns:
+        p_filter: Filtered position trajectories
+        q_filter: Filtered orientation trajectories
+        t_filter: Filtered time stamps
+    """
 
-    min_thold = 0.05
-    pct_thold = 0.8
+    min_thold = 0.05  # Minimum angular velocity threshold
+    pct_thold = 0.8   # Percentage of trajectory to apply filtering to
 
     L = len(q_list)
     
@@ -168,22 +232,55 @@ def _filter(p_list, q_list, t_list):
     return p_filter, q_filter, t_filter
 
 
+def pre_process(p_raw, q_raw, t_raw, shift=False, opt="savgol"):
+    """
+    Complete preprocessing pipeline for position and orientation trajectories
+    
+    Args:
+        p_raw: Raw position trajectories
+        q_raw: Raw orientation trajectories
+        t_raw: Raw time stamps
+        opt: Smoothing method for orientations
+        
+    Returns:
+        p_in: Preprocessed position trajectories
+        q_in: Preprocessed orientation trajectories
+        t_raw: Time stamps
+    """
+    if shift:
+        p_in, p_att, p_att_list = _shift_pos(p_raw)
+        q_in, q_att, q_att_list = _shift_ori(q_raw)
+        p_in = _smooth_pos(p_in)
+    else:
+        L = len(p_raw)
+        p_att_list  = [p_raw[l][-1, :]  for l in range(L)]  
+        p_att  =  np.mean(np.array(p_att_list), axis=0)
 
-def pre_process(p_raw, q_raw, t_raw, opt="savgol"):
+        q_att_list  = [q_raw[l][-1]  for l in range(L)]  
+        q_att  = R.from_quat([q_att_list[l].as_quat() for l in range(L)]).mean()
 
-    p_in, p_att             = _shift_pos(p_raw)
-    q_in, q_att             = _shift_ori(q_raw)
-
-    p_in                    = _smooth_pos(p_in)
+        p_in                    = _smooth_pos(p_raw)
+        q_in                    = q_raw
     # q_in                    = _smooth_ori(q_in, q_att, opt) # needed or not?
 
     # p_in, q_in, t_in        = _filter(p_in, q_in, t_raw)  # needed or not?
 
-    return p_in, q_in, t_raw
-
+    return p_in, q_in, t_raw, p_att, q_att
 
 
 def compute_output(p_list, q_list, t_list):
+    """
+    Compute velocities from position and orientation trajectories
+    
+    Args:
+        p_list: List of position trajectories
+        q_list: List of orientation trajectories
+        t_list: List of time stamps
+        
+    Returns:
+        p_out: List of position velocities
+        q_out: List of orientations (for each velocity point)
+    """
 
     L = len(q_list)
 
@@ -192,6 +289,12 @@ def compute_output(p_list, q_list, t_list):
 
     for l in range(L):
         M       = len(q_list[l])
+        if M == 1:
+            p_out_l = [np.zeros((3))]
+            q_out_l = [q_list[l][0]]
+            p_out.append(np.array(p_out_l))
+            q_out.append(q_out_l)
+            continue
 
         p_out_l  = []
         q_out_l  = []
@@ -211,8 +314,8 @@ def compute_output(p_list, q_list, t_list):
             p_out_l.append(v)
             q_out_l.append(q_ip1)
 
-        p_out_l.append(v)
-        q_out_l.append(q_ip1)
+        p_out_l.append(v)  # Repeat the last velocity
+        q_out_l.append(q_ip1)  # Add the last orientation
 
         p_out.append(np.array(p_out_l))
         q_out.append(q_out_l)
@@ -223,6 +326,19 @@ def compute_output(p_list, q_list, t_list):
 
 
 def extract_state(p_list, q_list):
+    """
+    Extract initial states and attractor state from trajectories
+    
+    Args:
+        p_list: List of position trajectories
+        q_list: List of orientation trajectories
+        
+    Returns:
+        p_init: List of initial positions
+        q_init: List of initial orientations
+        p_att: Attractor position
+        q_att: Attractor orientation
+    """
     L = len(q_list)
 
     p_init = []  # list of L initial points given L trajectories
@@ -241,7 +357,21 @@ def extract_state(p_list, q_list):
 
 
 def rollout_list(p_in, q_in, p_out, q_out):
-    """ Roll out the nested list into a single list of M entries """
+    """ 
+    Roll out the nested list of trajectories into single arrays
+    
+    Args:
+        p_in: List of position trajectories
+        q_in: List of orientation trajectories
+        p_out: List of position velocities
+        q_out: List of orientation trajectories for velocities
+        
+    Returns:
+        p_in_rollout: Flattened array of positions
+        q_in_rollout: Flattened list of orientations
+        p_out_rollout: Flattened array of velocities
+        q_out_rollout: Flattened list of orientations for velocities
+    """
 
     L = len(q_in)
 

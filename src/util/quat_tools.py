@@ -94,7 +94,23 @@ def _process_xy(x, y):
     x = x / np.tile(np.linalg.norm(x, axis=1, keepdims=True), (1,M))
     y = y / np.tile(np.linalg.norm(x, axis=1, keepdims=True), (1,M))
     
+    # --------------------------------------------------------------------
+    # Canonicalize quaternion signs to remove the double-cover ambiguity.
+    # For each pair (x_i, y_i) make sure they lie in the same hemisphere of
+    # the 4-D unit sphere.  If the dot product is negative, flip the sign of
+    # y_i so that dot(x_i, y_i) ≥ 0.  This guarantees that subsequent
+    # geodesic computations (angle, log map, etc.) follow the shortest arc
+    # and prevents spurious equilibria at ~180° from the intended
+    # orientation.
+    # --------------------------------------------------------------------
 
+    dot_xy = np.sum(x * y, axis=1, keepdims=True)  # shape (N,1)
+    sign_correction = np.where(dot_xy < 0.0, -1.0, 1.0)  # (N,1)
+    y = y * sign_correction  # broadcast sign flip where needed
+
+    # Re-normalise (just in case) after sign flip
+    y = y / np.tile(np.linalg.norm(y, axis=1, keepdims=True), (1, M))
+    
     return x,y
 
 
