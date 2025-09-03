@@ -49,21 +49,29 @@ def plot_vel(v_test, w_test):
 
 def plot_gamma(gamma_arr, **argv):
 
-    M, K = gamma_arr.shape
-
-    fig, axs = plt.subplots(K, 1, figsize=(12, 8))
-
+    K, M = gamma_arr.shape
     colors = ["r", "g", "b", "k", 'c', 'm', 'y', 'crimson', 'lime'] + [
-    "#" + ''.join([random.choice('0123456789ABCDEF') for j in range(6)]) for i in range(200)]
-
-    for k in range(K):
-        axs[k].scatter(np.arange(M), gamma_arr[:, k], s=5, color=colors[k])
-        axs[k].set_ylim([0, 1])
+        "#" + ''.join([random.choice('0123456789ABCDEF') for j in range(6)]) for i in range(200)]
     
-    if "title" in argv:
-        axs[0].set_title(argv["title"])
+    if K == 1:
+        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+
+        ax.scatter(np.arange(M), gamma_arr[0, :], s=5, color=colors[0])
+        ax.set_ylim([0, 1])
+        if "title" in argv:
+            ax.set_title(argv["title"])
+        else:
+            ax.set_title(r"$\gamma(\cdot)$ over Time")
     else:
-        axs[0].set_title(r"$\gamma(\cdot)$ over Time")
+        fig, axs = plt.subplots(K, 1, figsize=(12, 8))
+
+        for k in range(K):
+            axs[k].scatter(np.arange(M), gamma_arr[k, :], s=5, color=colors[k])
+            axs[k].set_ylim([0, 1])
+        if "title" in argv:
+            axs[0].set_title(argv["title"])
+        else:
+            axs[0].set_title(r"$\gamma(\cdot)$ over Time")
 
 
 

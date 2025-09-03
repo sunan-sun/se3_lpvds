@@ -12,7 +12,6 @@ p_raw, q_raw, t_raw, dt = load_tools.load_npy()
 # p_raw, q_raw, t_raw = load_tools.load_demo_dataset()
 
 
-
 '''Process data'''
 p_in, q_in, t_in             = process_tools.pre_process(p_raw, q_raw, t_raw, opt= "savgol")
 p_out, q_out                 = process_tools.compute_output(p_in, q_in, t_in)
@@ -43,7 +42,7 @@ p_test, q_test, gamma_pos, gamma_ori, v_test, w_test = se3_obj.sim(p_init, q_ini
 
 plot_tools.plot_result(p_in, p_test, q_test)
 
-plot_tools.plot_gamma(gamma_pos, title="pos")
-plot_tools.plot_gamma(gamma_ori, title="ori")
+plot_tools.plot_gamma(gamma_pos.T, title="pos")
+plot_tools.plot_gamma(gamma_ori.T, title="ori")
 
 plt.show()
