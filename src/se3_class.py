@@ -57,10 +57,10 @@ class se3_class:
 
         # store parameters
         self.p_in  = p_in
-        self.q_in  = standardized_q_in
+        self.q_in  = q_in
 
         self.p_out = p_out
-        self.q_out = standardized_q_out
+        self.q_out = q_out
 
         self.p_att = p_att
         self.q_att = q_att
