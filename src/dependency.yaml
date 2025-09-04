@@ -1,0 +1,9 @@
+repositories:
+  lpvds:
+    type: git
+    url: git@github.com:sunan-sun/lpvds.git
+    path: lpvds
+  quaternion_ds:
+    type: git
+    url: git@github.com:sunan-sun/quaternion_ds.git
+    path: quaternion_ds

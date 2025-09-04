@@ -6,6 +6,10 @@ __pycache__/
 # C extensions
 *.so
 
+# depends
+src/lpvds/
+src/quaternion_ds/
+
 # Distribution / packaging
 .Python
 build/
