@@ -1,6 +1,0 @@
-[submodule "src/lpvds"]
-	path = src/lpvds
-	url = git@github.com:sunan-sun/lpvds.git
-[submodule "src/quaternion_ds"]
-	path = src/quaternion_ds
-	url = git@github.com:sunan-sun/quaternion_ds.git
