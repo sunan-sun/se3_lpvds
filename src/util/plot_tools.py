@@ -9,10 +9,10 @@ from scipy.spatial.transform import Rotation as R
 import random
 
 
-font = {'family' : 'Times New Roman',
-         'size'   : 18
-         }
-mpl.rc('font', **font)
+# font = {'family' : 'Times New Roman',
+#          'size'   : 18
+#          }
+# mpl.rc('font', **font)
 
 
 
