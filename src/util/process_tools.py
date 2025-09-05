@@ -105,7 +105,7 @@ def _shift_ori(q_list):
     return q_shifted, q_shifted[-1][-1], q_att_list
 
 
-def _smooth_pos(p_in:list, k=10):
+def _smooth_pos(p_in:list, k=80):
     """ 
     Smooth position trajectories using Savitzky-Golay filter
     
