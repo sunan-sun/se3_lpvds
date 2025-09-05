@@ -35,32 +35,34 @@ class se3_class:
             N:                      Observation dimenstion (assuming 3D)
         """
         # Standardize quaternion signs (ensure scalar part w is negative)
-        standardized_q_in = []
-        for q in q_in:
-            quat = q.as_quat()
-            if quat[3] > 0:
-                standardized_q_in.append(R.from_quat(-quat))
-            else:
-                standardized_q_in.append(q)
+        # standardized_q_in = []
+        # for q in q_in:
+        #     quat = q.as_quat()
+        #     if quat[3] > 0:
+        #         standardized_q_in.append(R.from_quat(-quat))
+        #     else:
+        #         standardized_q_in.append(q)
 
-        standardized_q_out = []
-        for q in q_out:
-            quat = q.as_quat()
-            if quat[3] > 0:
-                standardized_q_out.append(R.from_quat(-quat))
-            else:
-                standardized_q_out.append(q)
+        # standardized_q_out = []
+        # for q in q_out:
+        #     quat = q.as_quat()
+        #     if quat[3] > 0:
+        #         standardized_q_out.append(R.from_quat(-quat))
+        #     else:
+        #         standardized_q_out.append(q)
 
-        q_att_quat = q_att.as_quat()
-        if q_att_quat[3] > 0:
-            q_att = R.from_quat(-q_att_quat)
+        # q_att_quat = q_att.as_quat()
+        # if q_att_quat[3] > 0:
+        #     q_att = R.from_quat(-q_att_quat)
 
         # store parameters
         self.p_in  = p_in
-        self.q_in  = standardized_q_in
+        # self.q_in  = standardized_q_in
+        self.q_in  = q_in
 
         self.p_out = p_out
-        self.q_out = standardized_q_out
+        # self.q_out = standardized_q_out
+        self.q_out = q_out
 
         self.p_att = p_att
         self.q_att = q_att
