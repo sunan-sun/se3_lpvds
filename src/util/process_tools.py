@@ -5,6 +5,7 @@ This module provides tools for:
 - Computing velocities from trajectory data
 - Managing quaternions for orientation representation
 - Preprocessing trajectory data for dynamical systems learning
+- Data augmentation through interpolation to increase trajectory density
 """
 
 import os
@@ -13,6 +14,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial.transform import Slerp
 from scipy.spatial.transform import Rotation as R
 from scipy.signal import savgol_filter
+from scipy.interpolate import interp1d
 
 from . import quat_tools
 from .quat_tools import *
@@ -103,7 +105,7 @@ def _shift_ori(q_list):
     return q_shifted, q_shifted[-1][-1], q_att_list
 
 
-def _smooth_pos(p_in:list, k=80):
+def _smooth_pos(p_in:list, k=10):
     """ 
     Smooth position trajectories using Savitzky-Golay filter
     
@@ -389,5 +391,135 @@ def rollout_list(p_in, q_in, p_out, q_out):
             
 
     return p_in_rollout, q_in_rollout, p_out_rollout, q_out_rollout
+
+
+def _interpolate_positions(p_traj, t_traj, factor=3):
+    """
+    Interpolate position trajectory to create more data points
+    
+    Args:
+        p_traj: Position trajectory array of shape (N, 3)
+        t_traj: Time array of shape (N,)
+        factor: Interpolation factor (3 means 3x more points)
+        
+    Returns:
+        p_interp: Interpolated position trajectory
+        t_interp: Interpolated time array
+    """
+    N = len(t_traj)
+    
+    # Create new time points with factor times more resolution
+    t_new = np.linspace(t_traj[0], t_traj[-1], (N-1) * factor + 1)
+    
+    # Interpolate each dimension separately
+    p_interp = np.zeros((len(t_new), 3))
+    for dim in range(3):
+        f = interp1d(t_traj, p_traj[:, dim], kind='linear')
+        p_interp[:, dim] = f(t_new)
+    
+    return p_interp, t_new
+
+
+def _interpolate_orientations(q_traj, t_traj, factor=3):
+    """
+    Interpolate orientation trajectory using SLERP to create more data points
+    
+    Args:
+        q_traj: List of scipy Rotation objects
+        t_traj: Time array of shape (N,)
+        factor: Interpolation factor (3 means 3x more points)
+        
+    Returns:
+        q_interp: List of interpolated scipy Rotation objects
+        t_interp: Interpolated time array
+    """
+    N = len(t_traj)
+    
+    # Create new time points with factor times more resolution
+    t_new = np.linspace(t_traj[0], t_traj[-1], (N-1) * factor + 1)
+    
+    # Convert list of Rotation objects to a single Rotation object for SLERP
+    q_array = R.from_quat([q.as_quat() for q in q_traj])
+    
+    # Create SLERP interpolator
+    slerp = Slerp(t_traj, q_array)
+    
+    # Interpolate orientations
+    q_interp_array = slerp(t_new)
+    
+    # Convert back to list of individual Rotation objects
+    q_interp = [R.from_quat(q_interp_array[i].as_quat()) for i in range(len(q_interp_array))]
+    
+    return q_interp, t_new
+
+
+def augment_data(p_list, q_list, t_list, factor=3):
+    """
+    Augment trajectory data by interpolating between points to create more data points
+    
+    Args:
+        p_list: List of position trajectories (each is numpy array of shape (N, 3))
+        q_list: List of orientation trajectories (each is list of scipy Rotation objects)
+        t_list: List of time arrays (each is numpy array of shape (N,))
+        factor: Interpolation factor (3 means 3x more points between each pair of original points)
+        
+    Returns:
+        p_augmented: List of augmented position trajectories
+        q_augmented: List of augmented orientation trajectories  
+        t_augmented: List of augmented time arrays
+    """
+    L = len(p_list)
+    
+    p_augmented = []
+    q_augmented = []
+    t_augmented = []
+    
+    for l in range(L):
+        # Skip trajectories that are too short to interpolate
+        if len(p_list[l]) < 2:
+            p_augmented.append(p_list[l])
+            q_augmented.append(q_list[l])
+            t_augmented.append(t_list[l])
+            continue
+            
+        # Interpolate positions
+        p_interp, t_interp = _interpolate_positions(p_list[l], t_list[l], factor)
+        
+        # Interpolate orientations
+        q_interp, _ = _interpolate_orientations(q_list[l], t_list[l], factor)
+        
+        p_augmented.append(p_interp)
+        q_augmented.append(q_interp)
+        t_augmented.append(t_interp)
+    
+    return p_augmented, q_augmented, t_augmented
+
+
+def preprocess_with_augmentation(p_raw, q_raw, t_raw, augment_factor=6, shift=False, opt="savgol"):
+    """
+    Complete preprocessing pipeline with data augmentation
+    
+    Args:
+        p_raw: Raw position trajectories
+        q_raw: Raw orientation trajectories  
+        t_raw: Raw time stamps
+        augment_factor: Factor for data augmentation (3 means 3x more points)
+        shift: Whether to shift trajectories to common attractor
+        opt: Smoothing method for orientations
+        
+    Returns:
+        p_in: Preprocessed and augmented position trajectories
+        q_in: Preprocessed and augmented orientation trajectories
+        t_in: Augmented time stamps
+        p_att: Attractor position
+        q_att: Attractor orientation
+    """
+    # First augment the data
+    p_aug, q_aug, t_aug = augment_data(p_raw, q_raw, t_raw, factor=augment_factor)
+    
+    # Then apply standard preprocessing
+    p_in, q_in, t_in, p_att, q_att = pre_process(p_aug, q_aug, t_aug, shift=shift, opt=opt)
+    
+    return p_in, q_in, t_in, p_att, q_att
 
 
