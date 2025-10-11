@@ -1,0 +1,20 @@
+repositories:
+  src/lpvds:
+    type: git
+    url: https://github.com/sunan-sun/lpvds.git
+    
+  src/quaternion_ds:
+    type: git
+    url: https://github.com/sunan-sun/quaternion_ds.git
+
+
+  # sub-deps listed explicitly
+  src/lpvds/src/damm:
+    type: git
+    url: https://github.com/sunan-sun//damm.git
+    version: main
+
+  src/lpvds/src/dsopt:
+    type: git
+    url: https://github.com/sunan-sun//dsopt.git
+    version: main
