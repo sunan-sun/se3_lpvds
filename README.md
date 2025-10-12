@@ -6,10 +6,10 @@
 
 
 
-This is the codebase for SE(3) Linear Parameter Varying Dynamical Systems, or SE(3) LPV-DS. To use this code, please follow the instruction below to pull the required dependencies including the [LPV-DS](https://github.com/SunannnSun/lpvds) and [quaternion-DS](https://github.com/sunan-sun/quaternion_ds.git), which are the modules for position and orientaion planning/control respectively.
+This is the codebase for SE(3) Linear Parameter Varying Dynamical Systems, or SE(3) LPV-DS. To use this code, please follow the instruction below to pull the required dependencies including the [LPV-DS](https://github.com/SunannnSun/lpvds) and [quaternion-DS](https://github.com/sunan-sun/quaternion_ds.git), which are the modules for position and orientaion planning/control respectively. See examples below for the time evolutions of running SE(3) LPV-DS on controling robot arms to perform real-world tasks.
 
 <p align="center">
-  <img src="imgs/image.png"  height="400" style="vertical-align:middle;">
+  <img src="imgs/image.png"  height="450" style="vertical-align:middle;">
 </p>
 
 
