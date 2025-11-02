@@ -42,8 +42,7 @@ def _process_bag(path):
         q_raw.append([R.from_quat(quat_traj[:, i]) for i in range(quat_traj.shape[1]) ])
         t_raw.append(time_traj.reshape(time_traj.shape[1]))
 
-    dt = np.average([t_raw[0][i+1] - t_raw[0][i] for i in range(len(t_raw[0])-1)])
-
+    dt = (t_raw[0][-1] - t_raw[0][0])/len(t_raw[0])
     return p_raw, q_raw, t_raw, dt
 
 
@@ -69,7 +68,7 @@ def _get_sequence(seq_file):
 
 
 
-def load_clfd_dataset(task_id=1, num_traj=1, sub_sample=3):
+def load_clfd_dataset(task_id=1, num_traj=1, sub_sample=3, duration=10.0):
     """
     Load data from clfd dataset
 
@@ -90,7 +89,7 @@ def load_clfd_dataset(task_id=1, num_traj=1, sub_sample=3):
     """
 
     L = num_traj
-    T = 10.0            # pick a time duration 
+    # T = 10.0            # pick a time duration 
 
     file_path           = os.path.dirname(os.path.realpath(__file__))  
     dir_path            = os.path.dirname(file_path)
@@ -117,10 +116,9 @@ def load_clfd_dataset(task_id=1, num_traj=1, sub_sample=3):
 
         p_raw.append(data[l, :, :3])
         q_raw.append([R.from_quat(q) for q in data_ori.tolist()])
-        t_raw.append(np.linspace(0, T, M, endpoint=False))   # hand engineer an equal-length time stamp
+        t_raw.append(np.linspace(0, duration, M, endpoint=False))   # hand engineer an equal-length time stamp
 
-    dt = np.average([t_raw[0][i+1] - t_raw[0][i] for i in range(len(t_raw[0])-1)])
-
+    dt = t_raw[0][1] - t_raw[0][0]
     return p_raw, q_raw, t_raw, dt
 
 
@@ -140,7 +138,7 @@ def load_demo_dataset():
 
 
 
-def load_npy():
+def load_npy(duration):
 
     traj = np.load("dataset/UMI/traj1.npy")
 
@@ -148,12 +146,9 @@ def load_npy():
 
     p_raw = [traj[i, :3, -1] for i in range(traj.shape[0])]
 
-    """provide dt"""
-    # dt = 0.07
-
     """or provide T"""
-    T = 5
-    dt = T/traj.shape[0]
+
+    dt = duration/traj.shape[0]
 
     t_raw = [dt*i for i in range(traj.shape[0])]
 

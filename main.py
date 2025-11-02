@@ -2,15 +2,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 from src.se3_class import se3_class
-from src.util import plot_tools, load_tools, process_tools
+from src.util import load_tools, process_tools
 
 
 
 '''Load data'''
-p_raw, q_raw, t_raw, dt = load_tools.load_npy()
-# p_raw, q_raw, t_raw = load_tools.load_clfd_dataset(task_id=0, num_traj=9, sub_sample=1)
-# p_raw, q_raw, t_raw = load_tools.load_demo_dataset()
-
+T = 5
+# p_raw, q_raw, t_raw, dt = load_tools.load_npy(duration=T)
+p_raw, q_raw, t_raw, dt = load_tools.load_clfd_dataset(task_id=1, num_traj=2, sub_sample=1, duration=T)
+# p_raw, q_raw, t_raw, dt= load_tools.load_demo_dataset()
+# T = t_raw[0][-1] - t_raw[0][0]
 
 '''Process data'''
 p_in, q_in, t_in             = process_tools.pre_process(p_raw, q_raw, t_raw, opt= "savgol")
@@ -27,22 +28,25 @@ se3_obj.begin()
 
 
 '''Evaluate results'''
-p_init = p_init[0]
-q_init = R.from_quat(-q_init[0].as_quat())
-p_test, q_test, gamma_pos, gamma_ori, v_test, w_test = se3_obj.sim(p_init, q_init, step_size=0.05)
-
+p_test_list = []
+q_test_list = []
+for p_0, q_0 in zip(p_init, q_init):
+    q_0 = R.from_quat(q_0.as_quat())
+    p_test, q_test, gamma_pos, gamma_ori, v_test, w_test = se3_obj.sim(p_0, q_0, step_size=dt, duration=T)
+    p_test_list.append(p_test)
+        
 
 
 '''Plot results'''
-# plot_tools.plot_p_out(p_in, p_out, se3_obj.pos_ds)
-# plot_tools.plot_q_out(q_in, q_out, se3_obj.ori_ds)
+from src.lpvds.src.damm.src.util.plot_tools import plot_gmm
+plot_gmm(p_in, se3_obj.pos_ds.damm.z, se3_obj.pos_ds.damm)
 
-# plot_tools.plot_gmm_pos(p_in, se3_obj.pos_ds.damm)
-# plot_tools.plot_gmm_ori(p_in, se3_obj.ori_ds.gmm)
+from src.lpvds.src.util.plot_tools import plot_ds, plot_gamma
+plot_ds(p_in, p_test_list, se3_obj.pos_ds)
+plot_gamma(gamma_pos, title="pos")
+plot_gamma(gamma_ori, title="ori")
 
+from src.util import plot_tools
 plot_tools.plot_result(p_in, p_test, q_test)
-
-plot_tools.plot_gamma(gamma_pos.T, title="pos")
-plot_tools.plot_gamma(gamma_ori.T, title="ori")
 
 plt.show()
