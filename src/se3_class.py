@@ -78,16 +78,17 @@ class se3_class:
 
 
 
-    def _logOut(self):
-        self.ori_ds._logOut(self.output_path)
-        self.pos_ds._logOut(self.output_path)
+    def logOut(self, write_json=False, output_path=None):
+        ds_linear_dict  = self.pos_ds._logOut(write_json, self.output_path)
+        ds_angular_dict = self.ori_ds._logOut(write_json, self.output_path)
 
+        return ds_linear_dict, ds_angular_dict
 
 
     def begin(self):
         self._cluster()
         self._optimize()
-        self._logOut()
+        # self._logOut()
 
 
 
