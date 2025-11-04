@@ -1,4 +1,4 @@
-import os, sys, json
+import os, sys, json, joblib
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
@@ -36,17 +36,18 @@ class se3_class:
         """
 
         # store parameters
-        self.p_in  = p_in
-        self.q_in  = q_in
 
-        self.p_out = p_out
-        self.q_out = q_out
+        # self.p_in  = p_in
+        # self.q_in  = q_in
 
-        self.p_att = p_att
-        self.q_att = q_att
+        # self.p_out = p_out
+        # self.q_out = q_out
+
+        # self.p_att = p_att
+        # self.q_att = q_att
 
         self.dt = dt
-        self.K_init = K_init
+        # self.K_init = K_init
         self.M = len(q_in)
 
 
@@ -92,7 +93,7 @@ class se3_class:
 
 
 
-    def sim(self, p_init, q_init, step_size, duration):
+    def sim(self, p_init, q_init, p_att, q_att, step_size, duration):
         p_test = [p_init.reshape(1, -1)]
         q_test = [q_init]
 
@@ -119,10 +120,12 @@ class se3_class:
             w_test.append(w)
 
             i += 1
-        if np.linalg.norm((q_test[-1] * self.q_att.inv()).as_rotvec()) <= self.tol and np.linalg.norm((p_test[-1] - self.p_att)) <= self.tol:
+        if np.linalg.norm((q_test[-1] * q_att.inv()).as_rotvec()) <= self.tol and np.linalg.norm((p_test[-1] - p_att)) <= self.tol:
             print("Converged within max iteration")
         else:
             print("Did not converge within max iteration")
+            print("Pos norm: ", np.linalg.norm((p_test[-1] - p_att)))
+            print("Ori norm: ", np.linalg.norm((q_test[-1] * q_att.inv()).as_rotvec()))
 
 
         return np.vstack(p_test), q_test, np.array(gamma_pos_list), np.array(gamma_ori_list), v_test, w_test
@@ -137,3 +140,26 @@ class se3_class:
         q_next, gamma_ori, w = self.ori_ds._step(q_in, step_size)
 
         return p_next, q_next, gamma_pos, gamma_ori, v, w
+
+
+    def save(self, path):
+        """
+        Save the entire class instance to a file using joblib.
+        Example: self.save("models/se3_model.pkl")
+        """
+        # ensure directory exists
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        joblib.dump(self, path)
+        print(f"[INFO] Model saved successfully to {path}")
+
+    @classmethod
+    def load(cls, path):
+        """
+        Load a saved class instance from a file.
+        Example: se3 = se3_class.load("models/se3_model.pkl")
+        """
+        obj = joblib.load(path)
+        if not isinstance(obj, cls):
+            raise TypeError(f"Loaded object is not of type {cls.__name__}")
+        print(f"[INFO] Model loaded successfully from {path}")
+        return obj

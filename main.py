@@ -32,7 +32,7 @@ p_test_list = []
 q_test_list = []
 for p_0, q_0 in zip(p_init, q_init):
     q_0 = R.from_quat(q_0.as_quat())
-    p_test, q_test, gamma_pos, gamma_ori, v_test, w_test = se3_obj.sim(p_0, q_0, step_size=dt, duration=T)
+    p_test, q_test, gamma_pos, gamma_ori, v_test, w_test = se3_obj.sim(p_0, q_0, p_att, q_att, step_size=dt, duration=T)
     p_test_list.append(p_test)
         
 
