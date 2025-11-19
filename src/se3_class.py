@@ -47,7 +47,7 @@ class se3_class:
         self.q_att = q_att
 
         self.dt = dt
-        # self.K_init = K_init
+        self.K_init = K_init
         self.M = len(q_in)
 
 
