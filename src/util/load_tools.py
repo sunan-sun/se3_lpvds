@@ -6,7 +6,7 @@ from scipy.spatial.transform import Rotation as R
 
 
 
-def _process_bag(path):
+def _process_bag(path, if_flip=False):
     """ Process .mat files that is converted from .bag files """
 
     data_ = loadmat(r"{}".format(path))
@@ -38,11 +38,21 @@ def _process_bag(path):
         quat_traj = quat_traj[:, first_non_zero_index:last_non_zero_index]
         time_traj = time_traj[:, first_non_zero_index:last_non_zero_index]
         
+        """ this is mostly for mani_py project"""
+        if if_flip: 
+            # Flip position trajectory
+            pos_traj = np.fliplr(pos_traj)
+            # Flip quaternion trajectory
+            quat_traj = np.fliplr(quat_traj)
+            # Flip and adjust time trajectory
+            time_traj = np.fliplr(time_traj)
+            time_traj = time_traj.max() - time_traj
+        
         p_raw.append(pos_traj.T)
         q_raw.append([R.from_quat(quat_traj[:, i]) for i in range(quat_traj.shape[1]) ])
         t_raw.append(time_traj.reshape(time_traj.shape[1]))
 
-    dt = (t_raw[0][-1] - t_raw[0][0])/len(t_raw[0])
+    dt = np.average([t_raw[0][i+1] - t_raw[0][i] for i in range(len(t_raw[0])-1)])
     return p_raw, q_raw, t_raw, dt
 
 
