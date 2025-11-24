@@ -150,10 +150,10 @@ def compute_ik(robot, ee_link, arm_joint_indices, dof_joint_indices, p_target, q
     q = [ik_sol[d] for d in [dof_joint_indices.index(j) for j in arm_joint_indices]]
     
     # Validate IK solution
-    # reset_arm(robot, arm_joint_indices, q)
-    # ee_state = p.getLinkState(robot, ee_link, computeForwardKinematics=True)
-    # actual_pos = np.array(ee_state[4])
-    # actual_orn = np.array(ee_state[5])
+    reset_arm(robot, arm_joint_indices, q)
+    ee_state = p.getLinkState(robot, ee_link, computeForwardKinematics=True)
+    actual_pos = np.array(ee_state[4])
+    actual_orn = np.array(ee_state[5])
     
     # pos_error = np.linalg.norm(actual_pos - p_target)
     # orn_error = np.linalg.norm(actual_orn - q_target.as_quat())
@@ -236,9 +236,9 @@ def main():
                       p_next[0], q_next, current_q=current_q)
         set_arm_positions(robot, arm_joint_indices, q)
         current_q = q  
-        i += 1
 
         p.stepSimulation()
+        i += 1
 
     p.disconnect()
 
