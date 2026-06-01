@@ -5,12 +5,13 @@ from scipy.spatial.transform import Rotation as R
 from .util import quat_tools, plot_tools
 from .lpvds.src.lpvds_class import lpvds_class
 from .quaternion_ds.src.quat_class import quat_class
+from .quaternion_ds.src.quat_class_so3 import quat_class_so3
 
 
 
 
 class se3_class:
-    def __init__(self, p_in:np.ndarray, q_in:list, p_out:np.ndarray, q_out:list, p_att:np.ndarray, q_att:R, dt:float, K_init:int) -> None:
+    def __init__(self, p_in:np.ndarray, q_in:list, p_out:np.ndarray, q_out:list, p_att:np.ndarray, q_att:R, dt:float, K_init:int, ori_mode:str="so3", cluster_method:str="legacy_gmm") -> None:
         """
         Parameters:
         ----------
@@ -35,16 +36,16 @@ class se3_class:
             N:                      Observation dimenstion (assuming 3D)
         """
 
-        # store parameters
+        # store parameters (kept so saved models are self-contained: the MuJoCo
+        # runner reads the initial pose p_in[0]/q_in[0] and the attractor).
+        self.p_in  = p_in
+        self.q_in  = q_in
 
-        # self.p_in  = p_in
-        # self.q_in  = q_in
+        self.p_out = p_out
+        self.q_out = q_out
 
-        # self.p_out = p_out
-        # self.q_out = q_out
-
-        # self.p_att = p_att
-        # self.q_att = q_att
+        self.p_att = p_att
+        self.q_att = q_att
 
         self.dt = dt
         # self.K_init = K_init
@@ -63,7 +64,17 @@ class se3_class:
 
         # initialize lpvds class
         self.pos_ds = lpvds_class(p_in, p_out, p_att)
-        self.ori_ds = quat_class(q_in, q_out, q_att, dt, K_init)
+
+        # Orientation DS. "so3" is the SO(3) Lie formulation (quat_class_so3,
+        # predicting body angular velocity via log/exp on SO(3)); "s3" is the
+        # legacy unit-quaternion S^3 tangent-space formulation (quat_class).
+        self.ori_mode = ori_mode
+        if ori_mode == "so3":
+            self.ori_ds = quat_class_so3(q_in, q_out, q_att, dt, K_init, cluster_method=cluster_method)
+        elif ori_mode == "s3":
+            self.ori_ds = quat_class(q_in, q_out, q_att, dt, K_init)
+        else:
+            raise ValueError(f"Unknown ori_mode '{ori_mode}'. Expected 'so3' or 's3'.")
 
 
 
