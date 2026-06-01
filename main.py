@@ -3,13 +3,20 @@ import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 from src.se3_class import se3_class
 from src.util import load_tools, process_tools
+from pathlib import Path
+import sys
 
+
+REPO_ROOT = Path(__file__).resolve().parents[0]
+DATA_DIR = REPO_ROOT / "dataset" / "tasks" / "passage_original.h5"
+MODELS_DIR = REPO_ROOT / "models" / "se3.pkl"
 
 
 '''Load data'''
 T = 5
 # p_raw, q_raw, t_raw, dt = load_tools.load_npy(duration=T)
-p_raw, q_raw, t_raw, dt = load_tools.load_clfd_dataset(task_id=1, num_traj=2, sub_sample=1, duration=T)
+# p_raw, q_raw, t_raw, dt = load_tools.load_clfd_dataset(task_id=1, num_traj=2, sub_sample=1, duration=T)
+p_raw, q_raw, t_raw, dt = load_tools.load_franka_h5(DATA_DIR,fixed_time=True, T=T, target_length=400, vel_threshold=0.02)
 # p_raw, q_raw, t_raw, dt= load_tools.load_demo_dataset()
 # T = t_raw[0][-1] - t_raw[0][0]
 
@@ -24,7 +31,7 @@ p_in, q_in, p_out, q_out     = process_tools.rollout_list(p_in, q_in, p_out, q_o
 '''Run lpvds'''
 se3_obj = se3_class(p_in, q_in, p_out, q_out, p_att, q_att, dt, K_init=4)
 se3_obj.begin()
-
+se3_obj.save(MODELS_DIR)
 
 
 '''Evaluate results'''

@@ -194,7 +194,7 @@ ehthumbs.db
 Thumbs.db
 
 # Machine Learning / Data Science
-*.h5
+# *.h5
 *.hdf5
 *.joblib
 *.pkl
@@ -216,7 +216,7 @@ Thumbs.db
 *.onnx
 *.pb
 *.tflite
-*.h5
+# *.h5
 *.hdf5
 *.keras
 *.safetensors

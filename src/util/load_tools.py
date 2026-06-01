@@ -1,4 +1,5 @@
 import os
+import h5py
 import numpy as np
 from scipy.io import loadmat
 from scipy.spatial.transform import Rotation as R
@@ -163,3 +164,152 @@ def load_npy(duration):
     t_raw = [dt*i for i in range(traj.shape[0])]
 
     return [np.vstack(p_raw)], [q_raw], [t_raw], dt
+
+
+
+
+#=======================================================================================
+#=======================================================================================
+#======= Codes below are designated for data collected using franka_interact============
+#=======================================================================================
+#=======================================================================================
+
+
+
+def _truncate_stationary(ee_pos, timestamps, vel_threshold=0.02, pad=5,
+                         ee_quat=None, ang_vel_threshold=0.05):
+    """Trim leading and trailing samples where the EE is not moving.
+
+    A sample is "moving" if its linear speed exceeds `vel_threshold` (m/s) OR,
+    when `ee_quat` is given, its angular speed exceeds `ang_vel_threshold`
+    (rad/s). Considering orientation matters for orientation-dominant rollouts
+    (e.g. the modulated quaternion rollouts), whose position can reach the goal
+    and freeze while the orientation is still settling — a position-only trim
+    would chop off the orientation's return.
+    """
+    if len(ee_pos) < 3:
+        return np.arange(len(ee_pos))
+
+    dt = np.diff(timestamps)
+    dt[dt <= 0] = np.min(dt[dt > 0]) if np.any(dt > 0) else 1e-3
+    speed = np.linalg.norm(np.diff(ee_pos, axis=0), axis=1) / dt
+    moving_mask = speed > vel_threshold
+
+    if ee_quat is not None and len(ee_quat) == len(ee_pos):
+        q = np.asarray(ee_quat, dtype=float)
+        dots = np.abs(np.sum(q[:-1] * q[1:], axis=1))
+        ang_speed = 2.0 * np.arccos(np.clip(dots, -1.0, 1.0)) / dt
+        moving_mask = moving_mask | (ang_speed > ang_vel_threshold)
+
+    moving = np.where(moving_mask)[0]
+    if moving.size == 0:
+        return np.arange(len(ee_pos))
+
+    start = max(moving[0] - pad, 0)
+    end = min(moving[-1] + pad + 2, len(ee_pos))  # +2 to recover the diff offset
+    return np.arange(start, end)
+
+
+
+def _downsample(indices_len, target_length):
+    if target_length is None or indices_len <= target_length:
+        return np.arange(indices_len)
+    return np.linspace(0, indices_len - 1, target_length).astype(int)
+
+
+
+
+def load_franka_h5(file_path, vel_threshold=0.02, target_length=400,
+                   fixed_time=False, T=4.0, pad=5, return_joints=False):
+    """Load every demo from a franka_interact recording.
+
+    Parameters
+    ----------
+    file_path : str
+        Path to the .h5 file (schema v2 with `demo_XXX` groups).
+    vel_threshold : float
+        Speed (m/s) below which a sample is considered stationary.
+    target_length : int or None
+        If set, each demo is uniformly downsampled to this many samples after
+        truncation.
+    fixed_time : bool
+        If True, the returned timestamps are evenly spaced over `T` seconds
+        instead of using the recorded `t_robot`.
+    T : float
+        Total trajectory duration used when `fixed_time=True`.
+    pad : int
+        Number of stationary samples kept around the moving segment.
+
+    Returns
+    -------
+    p_list : list of (N, 3) np.ndarray
+    q_list : list of list of scipy Rotation
+    t_list : list of (N,) np.ndarray
+    dt : float
+        Mean step size of the last loaded demo (matches `load_h5`'s contract).
+    """
+    if not os.path.isfile(file_path):
+        raise FileNotFoundError(file_path)
+
+    p_list, q_list, t_list, qj_list = [], [], [], []
+    dt = None
+
+    with h5py.File(file_path, 'r') as hf:
+        demo_keys = sorted(k for k in hf.keys() if k.startswith('demo_'))
+        if not demo_keys:
+            raise RuntimeError("No demo_* groups found in {}".format(file_path))
+
+        for key in demo_keys:
+            grp = hf[key]
+            ee_pos = np.asarray(grp['ee_pos'])
+            ee_quat = np.asarray(grp['ee_quat_xyzw'])
+            t_robot = np.asarray(grp['t_robot'])
+            q_joint = np.asarray(grp['q']) if return_joints else None
+
+            # 1. Truncate the stationary head/tail (consider orientation too,
+            #    so orientation-dominant rollouts aren't cut mid-return).
+            keep = _truncate_stationary(ee_pos, t_robot,
+                                        vel_threshold=vel_threshold, pad=pad,
+                                        ee_quat=ee_quat)
+            ee_pos = ee_pos[keep]
+            ee_quat = ee_quat[keep]
+            t_robot = t_robot[keep]
+            if q_joint is not None:
+                q_joint = q_joint[keep]
+
+            # 2. Optionally downsample to a fixed length.
+            sub = _downsample(len(ee_pos), target_length)
+            ee_pos = ee_pos[sub]
+            ee_quat = ee_quat[sub]
+            t_robot = t_robot[sub]
+            if q_joint is not None:
+                q_joint = q_joint[sub]
+
+            traj_len = len(ee_pos)
+            if traj_len < 2:
+                continue
+
+            # 3. Build the trajectory in the se3_lpvds format.
+            q_raw = [R.from_quat(ee_quat[i]) for i in range(traj_len)]
+            p_raw = ee_pos.astype(np.float64)
+
+            if fixed_time:
+                dt_local = T / traj_len
+                t_raw = np.array([dt_local * i for i in range(traj_len)])
+            else:
+                t_raw = t_robot - t_robot[0]
+                dt_local = float(np.mean(np.diff(t_raw)))
+
+            p_list.append(p_raw)
+            q_list.append(q_raw)
+            t_list.append(t_raw)
+            if q_joint is not None:
+                qj_list.append(q_joint.astype(np.float64))
+            dt = dt_local
+
+    if not p_list:
+        raise RuntimeError("All demos in {} were empty after truncation".format(file_path))
+
+    if return_joints:
+        return p_list, q_list, t_list, dt, qj_list
+    return p_list, q_list, t_list, dt
